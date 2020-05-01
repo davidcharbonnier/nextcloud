@@ -42,15 +42,17 @@ services:
     restart: always
     volumes:
       - nextcloud:/var/www/html:ro
-    environment:
-      - VIRTUAL_HOST=cloud.davidcharbonnier.fr
-      - LETSENCRYPT_HOST=cloud.davidcharbonnier.fr
-      - LETSENCRYPT_EMAIL=contact@davidcharbonnier.fr
     depends_on:
       - app
     networks:
-      - frontend
       - backend
+      - proxy-public
+    labels:
+      # Enable Traefik proxy to expose Nextcloud
+      - "traefik.enable=true"
+      - "traefik.http.routers.nextcloud.rule=Host(`cloud.davidcharbonnier.fr`)"
+      - "traefik.http.routers.nextcloud.entrypoints=websecure"
+      - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
 
   cron:
     image: nextcloud:18.0.3-fpm-alpine
@@ -63,53 +65,6 @@ services:
       - redis
     networks:
       - backend
-
-  proxy:
-    build: ./proxy
-    restart: always
-    container_name: proxy
-    ports:
-      - 80:80
-      - 443:443
-    volumes:
-      - certs:/etc/nginx/certs:ro
-      - vhost:/etc/nginx/vhost.d:rw
-      - html:/usr/share/nginx/html:rw
-      - conf:/etc/nginx/conf.d:rw
-    networks:
-      - frontend
-
-  docker-gen:
-    build: ./docker-gen
-    command: -notify-sighup proxy -watch /etc/docker-gen/templates/nginx.tmpl /etc/nginx/conf.d/default.conf
-    restart: always
-    container_name: docker-gen
-    volumes:
-      - certs:/etc/nginx/certs:rw
-      - vhost:/etc/nginx/vhost.d:rw
-      - conf:/etc/nginx/conf.d:rw
-      - /var/run/docker.sock:/tmp/docker.sock:ro
-    networks:
-      - frontend
-    depends_on:
-      - proxy
-
-  letsencrypt:
-    image: jrcs/letsencrypt-nginx-proxy-companion
-    restart: always
-    volumes:
-      - certs:/etc/nginx/certs:rw
-      - vhost:/etc/nginx/vhost.d:rw
-      - html:/usr/share/nginx/html:rw
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      - LETSENCRYPT_TEST=false
-      - NGINX_PROXY_CONTAINER=proxy
-      - NGINX_DOCKER_GEN_CONTAINER=docker-gen
-    networks:
-      - frontend
-    depends_on:
-      - proxy
 
 volumes:
   db:
@@ -124,11 +79,9 @@ volumes:
       type: none
       device: /var/lib/nextcloud/app
       o: bind
-  certs:
-  vhost:
-  html:
-  conf:
 
 networks:
+  proxy-public:
+    external:
+      name: proxy-public
   backend:
-  frontend:

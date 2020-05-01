@@ -27,7 +27,7 @@ services:
     environment:
       - MYSQL_HOST=db
       - REDIS_HOST=redis
-      - NEXTCLOUD_TRUSTED_DOMAINS=cloud.davidcharbonnier.local
+      - NEXTCLOUD_TRUSTED_DOMAINS=cloud.davidcharbonnier.fr
     env_file:
       - nextcloud.env
       - db.env
@@ -44,14 +44,15 @@ services:
       - nextcloud:/var/www/html:ro
     depends_on:
       - app
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=proxy-traefik"
-      - "traefik.http.routers.nextcloud.rule=Host(`cloud.davidcharbonnier.local`)"
-      - "traefik.http.routers.nextcloud.entrypoints=web"
     networks:
-      - proxy-public
       - backend
+      - proxy-public
+    labels:
+      # Enable Traefik proxy to expose Nextcloud
+      - "traefik.enable=true"
+      - "traefik.http.routers.nextcloud.rule=Host(`cloud.davidcharbonnier.fr`)"
+      - "traefik.http.routers.nextcloud.entrypoints=websecure"
+      - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
 
   cron:
     image: nextcloud:18.0.3-fpm-alpine
@@ -60,7 +61,8 @@ services:
       - nextcloud:/var/www/html:rw
     entrypoint: /cron.sh
     depends_on:
-      - app
+      - db
+      - redis
     networks:
       - backend
 
@@ -79,7 +81,7 @@ volumes:
       o: bind
 
 networks:
-  backend:
   proxy-public:
     external:
       name: proxy-public
+  backend:
